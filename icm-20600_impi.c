@@ -5,11 +5,28 @@
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_temperature_sensor)
+uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
 {
+	// Interface independent code
+
+	uint32_t mistake_code = 0;
+
+	if(icm_instance->gyro_full_scale > icm_gyro_2000dps)
+	{
+		icm_instance->gyro_full_scale = icm_gyro_2000dps;
+		mistake_code = ICM_20600_WRONG_GYROSCOPE_SCALE;
+	}
+	if( icm_instance->accel_full_scale > icm_accel_16g)
+	{
+		icm_instance->accel_full_scale = icm_accel_16g;
+		mistake_code = ICM_20600_WRONG_ACCELEROMETER_SCALE;
+	}
+
 // SPI based implementation
 #ifdef ICM_THROUGH_SPI
 
+	// Reset SPI connection
+	icm_instance->cs_high();	// Must be set high to start communication because this function should be called before any other.
 	icm_instance->cs_low();
 
 	// Check if connection is established
@@ -24,8 +41,25 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_
 	icm_instance->cs_high();
 	icm_instance->cs_low();
 
+	// Disable I2C interface
+	icm_instance->send_one_byte(ICM_I2C_IF | ICM_WRITE_REGISTERS);
+	icm_instance->send_one_byte(ICM_I2C_IF_DISABLE);
+
+	// Reset SPI connection
+	icm_instance->cs_high();
+	icm_instance->cs_low();
+
+	// Setup gyro and accel scales
+	icm_instance->send_one_byte(ICM_GYRO_CONFIG | ICM_WRITE_REGISTERS);
+	icm_instance->send_one_byte(icm_instance->gyro_full_scale << ICM_GYRO_CONFIG_FS_SEL_pos);
+	icm_instance->send_one_byte(icm_instance->accel_full_scale << ICM_ACCEL_CONFIG_1_FS_SEL_pos);
+
+	// Reset SPI connection
+	icm_instance->cs_high();
+	icm_instance->cs_low();
+
 	icm_instance->send_one_byte(ICM_PWR_MGMT_1 | ICM_WRITE_REGISTERS);
-	if ( enable_temperature_sensor )
+	if ( icm_instance->enable_temperature_sencor )
 	{
 		// Wakes up. Don't disable temperature sensor
 		icm_instance->send_one_byte(ICM_PWR_MGMT_1_CLKSEL_AUTO);
@@ -36,18 +70,10 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_
 		icm_instance->send_one_byte(ICM_PWR_MGMT_1_TEMP_DISABLE | ICM_PWR_MGMT_1_CLKSEL_AUTO);
 	}
 
-	// Reset SPI connection
-	icm_instance->cs_high();
-	icm_instance->cs_low();
-
-	// Disable I2C interface
-	icm_instance->send_one_byte(ICM_I2C_IF | ICM_WRITE_REGISTERS);
-	icm_instance->send_one_byte(ICM_I2C_IF_DISABLE);
-
 	icm_instance->cs_high();
 
 	icm_instance->device_was_initialized = 1;
-	return 0;
+	return mistake_code;
 
 #endif /* ICM_THROUGH_SPI */
 
@@ -59,13 +85,15 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_
 #endif /* ICM_THROUGH_I2C */
 }
 
+
+
 // ******************* Function ******************* //
 /*
 	@brief
  */
 // ************************************************ //
 
-uint32_t icm_20600_get_sensors_data(const icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data)
+uint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data)
 {
 	// Code that doesn't depend on library type
 
@@ -124,7 +152,7 @@ uint32_t icm_20600_get_sensors_data(const icm_20600_instance *icm_instance, int1
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_check_if_alive(const icm_20600_instance *icm_instance)
+uint32_t icm_20600_check_if_alive(icm_20600_instance *icm_instance)
 {
 //SPI implementation
 #ifdef ICM_THROUGH_SPI
@@ -151,53 +179,5 @@ uint32_t icm_20600_check_if_alive(const icm_20600_instance *icm_instance)
 #endif /* ICM_THROUGH_I2C */
 }
 
-// ******************* Function ******************* //
-/*
-	@brief
- */
-// ************************************************ //
-uint32_t icm_20600_setup(const icm_20600_instance *icm_instance, const uint8_t gyro_desired_dps_scale, const uint8_t accel_desired_g_scale)
-{
-	// Code that doesn't depend on library type
-
-	// Check if device was initialized
-	if (icm_instance->device_was_initialized == 0)
-	{
-		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
-	}
-
-	uint8_t gyro_scale_value = gyro_desired_dps_scale;
-	uint8_t accel_scale_value = accel_desired_g_scale;
-
-	if(gyro_desired_dps_scale > icm_gyro_2000dps)
-	{
-		gyro_scale_value = icm_gyro_2000dps;
-	}
-	if(accel_desired_g_scale > icm_accel_16g)
-	{
-		accel_scale_value = icm_accel_16g;
-	}
-
-#ifdef ICM_THROUGH_SPI
-
-	icm_instance->cs_low();
-
-	icm_instance->send_one_byte(ICM_GYRO_CONFIG | ICM_WRITE_REGISTERS);
-	icm_instance->send_one_byte(gyro_scale_value << ICM_GYRO_CONFIG_FS_SEL_pos);
-	icm_instance->send_one_byte(accel_scale_value << ICM_ACCEL_CONFIG_1_FS_SEL_pos);
-
-	icm_instance->cs_high();
-
-	return 0;
-
-#endif /* ICM_THROUGH_SPI */
-
-
-#ifdef ICM_THROUGH_I2C
-
-	#error I2C is not implemented yet
-
-#endif /* ICM_THROUGH_I2C */
-}
 
 

@@ -1,0 +1,273 @@
+[1mdiff --git a/icm-20600_impi.c b/icm-20600_impi.c[m
+[1mindex e7dc282..6d11c8a 100644[m
+[1m--- a/icm-20600_impi.c[m
+[1m+++ b/icm-20600_impi.c[m
+[36m@@ -5,11 +5,28 @@[m
+ 	@brief[m
+  */[m
+ // ************************************************ //[m
+[31m-uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_temperature_sensor)[m
+[32m+[m[32muint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)[m
+ {[m
+[32m+[m	[32m// Interface independent code[m
+[32m+[m
+[32m+[m	[32muint32_t mistake_code = 0;[m
+[32m+[m
+[32m+[m	[32mif(icm_instance->gyro_full_scale > icm_gyro_2000dps)[m
+[32m+[m	[32m{[m
+[32m+[m		[32micm_instance->gyro_full_scale = icm_gyro_2000dps;[m
+[32m+[m		[32mmistake_code = ICM_20600_WRONG_GYROSCOPE_SCALE;[m
+[32m+[m	[32m}[m
+[32m+[m	[32mif( icm_instance->accel_full_scale > icm_accel_16g)[m
+[32m+[m	[32m{[m
+[32m+[m		[32micm_instance->accel_full_scale = icm_accel_16g;[m
+[32m+[m		[32mmistake_code = ICM_20600_WRONG_ACCELEROMETER_SCALE;[m
+[32m+[m	[32m}[m
+[32m+[m
+ // SPI based implementation[m
+ #ifdef ICM_THROUGH_SPI[m
+ [m
+[32m+[m	[32m// Reset SPI connection[m
+[32m+[m	[32micm_instance->cs_high();	// Must be set high to start communication because this function should be called before any other.[m
+ 	icm_instance->cs_low();[m
+ [m
+ 	// Check if connection is established[m
+[36m@@ -24,8 +41,25 @@[m [muint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_[m
+ 	icm_instance->cs_high();[m
+ 	icm_instance->cs_low();[m
+ [m
+[32m+[m	[32m// Disable I2C interface[m
+[32m+[m	[32micm_instance->send_one_byte(ICM_I2C_IF | ICM_WRITE_REGISTERS);[m
+[32m+[m	[32micm_instance->send_one_byte(ICM_I2C_IF_DISABLE);[m
+[32m+[m
+[32m+[m	[32m// Reset SPI connection[m
+[32m+[m	[32micm_instance->cs_high();[m
+[32m+[m	[32micm_instance->cs_low();[m
+[32m+[m
+[32m+[m	[32m// Setup gyro and accel scales[m
+[32m+[m	[32micm_instance->send_one_byte(ICM_GYRO_CONFIG | ICM_WRITE_REGISTERS);[m
+[32m+[m	[32micm_instance->send_one_byte(icm_instance->gyro_full_scale << ICM_GYRO_CONFIG_FS_SEL_pos);[m
+[32m+[m	[32micm_instance->send_one_byte(icm_instance->accel_full_scale << ICM_ACCEL_CONFIG_1_FS_SEL_pos);[m
+[32m+[m
+[32m+[m	[32m// Reset SPI connection[m
+[32m+[m	[32micm_instance->cs_high();[m
+[32m+[m	[32micm_instance->cs_low();[m
+[32m+[m
+ 	icm_instance->send_one_byte(ICM_PWR_MGMT_1 | ICM_WRITE_REGISTERS);[m
+[31m-	if ( enable_temperature_sensor )[m
+[32m+[m	[32mif ( icm_instance->enable_temperature_sencor )[m
+ 	{[m
+ 		// Wakes up. Don't disable temperature sensor[m
+ 		icm_instance->send_one_byte(ICM_PWR_MGMT_1_CLKSEL_AUTO);[m
+[36m@@ -36,18 +70,10 @@[m [muint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_[m
+ 		icm_instance->send_one_byte(ICM_PWR_MGMT_1_TEMP_DISABLE | ICM_PWR_MGMT_1_CLKSEL_AUTO);[m
+ 	}[m
+ [m
+[31m-	// Reset SPI connection[m
+[31m-	icm_instance->cs_high();[m
+[31m-	icm_instance->cs_low();[m
+[31m-[m
+[31m-	// Disable I2C interface[m
+[31m-	icm_instance->send_one_byte(ICM_I2C_IF | ICM_WRITE_REGISTERS);[m
+[31m-	icm_instance->send_one_byte(ICM_I2C_IF_DISABLE);[m
+[31m-[m
+ 	icm_instance->cs_high();[m
+ [m
+ 	icm_instance->device_was_initialized = 1;[m
+[31m-	return 0;[m
+[32m+[m	[32mreturn mistake_code;[m
+ [m
+ #endif /* ICM_THROUGH_SPI */[m
+ [m
+[36m@@ -59,13 +85,15 @@[m [muint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_[m
+ #endif /* ICM_THROUGH_I2C */[m
+ }[m
+ [m
+[32m+[m
+[32m+[m
+ // ******************* Function ******************* //[m
+ /*[m
+ 	@brief[m
+  */[m
+ // ************************************************ //[m
+ [m
+[31m-uint32_t icm_20600_get_sensors_data(const icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data)[m
+[32m+[m[32muint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data)[m
+ {[m
+ 	// Code that doesn't depend on library type[m
+ [m
+[36m@@ -124,7 +152,7 @@[m [muint32_t icm_20600_get_sensors_data(const icm_20600_instance *icm_instance, int1[m
+ 	@brief[m
+  */[m
+ // ************************************************ //[m
+[31m-uint32_t icm_20600_check_if_alive(const icm_20600_instance *icm_instance)[m
+[32m+[m[32muint32_t icm_20600_check_if_alive(icm_20600_instance *icm_instance)[m
+ {[m
+ //SPI implementation[m
+ #ifdef ICM_THROUGH_SPI[m
+[36m@@ -151,53 +179,5 @@[m [muint32_t icm_20600_check_if_alive(const icm_20600_instance *icm_instance)[m
+ #endif /* ICM_THROUGH_I2C */[m
+ }[m
+ [m
+[31m-// ******************* Function ******************* //[m
+[31m-/*[m
+[31m-	@brief[m
+[31m- */[m
+[31m-// ************************************************ //[m
+[31m-uint32_t icm_20600_setup(const icm_20600_instance *icm_instance, const uint8_t gyro_desired_dps_scale, const uint8_t accel_desired_g_scale)[m
+[31m-{[m
+[31m-	// Code that doesn't depend on library type[m
+[31m-[m
+[31m-	// Check if device was initialized[m
+[31m-	if (icm_instance->device_was_initialized == 0)[m
+[31m-	{[m
+[31m-		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;[m
+[31m-	}[m
+[31m-[m
+[31m-	uint8_t gyro_scale_value = gyro_desired_dps_scale;[m
+[31m-	uint8_t accel_scale_value = accel_desired_g_scale;[m
+[31m-[m
+[31m-	if(gyro_desired_dps_scale > icm_gyro_2000dps)[m
+[31m-	{[m
+[31m-		gyro_scale_value = icm_gyro_2000dps;[m
+[31m-	}[m
+[31m-	if(accel_desired_g_scale > icm_accel_16g)[m
+[31m-	{[m
+[31m-		accel_scale_value = icm_accel_16g;[m
+[31m-	}[m
+[31m-[m
+[31m-#ifdef ICM_THROUGH_SPI[m
+[31m-[m
+[31m-	icm_instance->cs_low();[m
+[31m-[m
+[31m-	icm_instance->send_one_byte(ICM_GYRO_CONFIG | ICM_WRITE_REGISTERS);[m
+[31m-	icm_instance->send_one_byte(gyro_scale_value << ICM_GYRO_CONFIG_FS_SEL_pos);[m
+[31m-	icm_instance->send_one_byte(accel_scale_value << ICM_ACCEL_CONFIG_1_FS_SEL_pos);[m
+[31m-[m
+[31m-	icm_instance->cs_high();[m
+[31m-[m
+[31m-	return 0;[m
+[31m-[m
+[31m-#endif /* ICM_THROUGH_SPI */[m
+[31m-[m
+[31m-[m
+[31m-#ifdef ICM_THROUGH_I2C[m
+[31m-[m
+[31m-	#error I2C is not implemented yet[m
+[31m-[m
+[31m-#endif /* ICM_THROUGH_I2C */[m
+[31m-}[m
+ [m
+ [m
+[1mdiff --git a/icm-20600_impi.h b/icm-20600_impi.h[m
+[1mindex 90b5580..26e2435 100644[m
+[1m--- a/icm-20600_impi.h[m
+[1m+++ b/icm-20600_impi.h[m
+[36m@@ -19,22 +19,34 @@[m [mtypedef struct{[m
+ 	//		Function must send input byte with the SPI connected to the desired icm-20600 device in single-byte mode. Must return byte received by SPI during transmission.[m
+ 	const uint8_t (*send_one_byte)(const uint8_t byte_to_be_sent);[m
+ [m
+[32m+[m
+[32m+[m	[32muint32_t gyro_full_scale_setup;[m
+[32m+[m
+[32m+[m	[32muint32_t accel_full_scale_setup;[m
+[32m+[m
+ 	// Flag that shows that device was already initialized. Needed for internal library error checking optimization. Should be set to 0 at initialization.[m
+ 	uint32_t device_was_initialized;[m
+ [m
+[32m+[m	[32m// Enables temperature sensor if not 0[m
+[32m+[m	[32muint32_t enable_temperature_sensor;[m
+[32m+[m
+[32m+[m	[32muint16_t gyro_calibration_coefficients[3];[m
+[32m+[m
+ } icm_20600_instance;[m
+ [m
+ //****** ICM functions ******//[m
+ [m
+[31m-uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance, uint32_t enable_temperature_sensor);[m
+[32m+[m[32muint32_t icm_20600_basic_init(icm_20600_instance *icm_instance);[m
+[32m+[m
+[32m+[m[32muint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_storage_array);[m
+[32m+[m
+[32m+[m[32muint32_t icm_20600_get_processed(icm_20600_instance *icm_instance, float *data_storage_array);[m
+ [m
+[31m-uint32_t icm_20600_get_sensors_data(const icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data);[m
+ [m
+ // @brief send basic read message onto register with enable bit. If answer is 0 there is problems with connection to the device, or device didn't start.[m
+[31m-uint32_t icm_20600_check_if_alive(const icm_20600_instance * icm_instance);[m
+[31m-// Можно сделать вызов этой функции при инициализации, если с первого раза устройство не обнаружено[m
+[32m+[m[32muint32_t icm_20600_check_if_alive(icm_20600_instance * icm_instance);[m
+ [m
+[31m-uint32_t icm_20600_setup(const icm_20600_instance *icm_instance, const uint8_t gyro_desired_dps_scale, const uint8_t accel_desired_g_scale);[m
+[32m+[m[32m//uint32_t icm_20600_setup(const icm_20600_instance *icm_instance, const uint8_t gyro_desired_dps_scale, const uint8_t accel_desired_g_scale);[m
+ [m
+ [m
+ // ****** Note implemented yet[m
+[36m@@ -55,32 +67,38 @@[m [mvoid icm_20600_disable_one_accel_channel(icm_20600_instance *icm_instance, uint3[m
+ // @brief Used for icm-20600 data pointing in arrays[m
+ enum icm_data_order[m
+ {[m
+[31m-	icm_accelerometer_x,[m
+[31m-	icm_accelerometer_y,[m
+[31m-	icm_accelerometer_z,[m
+[31m-	icm_gyroscope_x,[m
+[31m-	icm_gyroscope_y,[m
+[31m-	icm_gyroscope_z,[m
+[31m-	icm_temperature[m
+[32m+[m	[32micm_accelerometer_x = 0,[m
+[32m+[m	[32micm_accelerometer_y = 1,[m
+[32m+[m	[32micm_accelerometer_z = 2,[m
+[32m+[m	[32micm_gyroscope_x = 3,[m
+[32m+[m	[32micm_gyroscope_y = 4,[m
+[32m+[m	[32micm_gyroscope_z = 5,[m
+[32m+[m	[32micm_temperature = 6[m
+ };[m
+ [m
+[32m+[m[32mtypedef enum icm_axis_order[m
+[32m+[m[32m{[m
+[32m+[m	[32micm_x = 0,[m
+[32m+[m	[32micm_y = 1,[m
+[32m+[m	[32micm_z = 2[m
+[32m+[m[32m} icm_axis_order;[m
+ [m
+ // @brief Gyroscope configuration parameters[m
+ enum icm_gyro_config_params[m
+ {[m
+[31m-	icm_gyro_250dps,[m
+[31m-	icm_gyro_500dps,[m
+[31m-	icm_gyro_1000dps,[m
+[31m-	icm_gyro_2000dps[m
+[32m+[m	[32micm_gyro_250dps = 0,[m
+[32m+[m	[32micm_gyro_500dps = 1,[m
+[32m+[m	[32micm_gyro_1000dps = 2,[m
+[32m+[m	[32micm_gyro_2000dps = 3[m
+ };[m
+ [m
+ // @brief Gyroscope configuration parameters[m
+ enum icm_accel_config_params[m
+ {[m
+[31m-	icm_accel_2g,[m
+[31m-	icm_accel_4g,[m
+[31m-	icm_accel_8g,[m
+[31m-	icm_accel_16g[m
+[32m+[m	[32micm_accel_2g = 0,[m
+[32m+[m	[32micm_accel_4g = 1,[m
+[32m+[m	[32micm_accel_8g = 2,[m
+[32m+[m	[32micm_accel_16g = 3[m
+ };[m
+ [m
+ [m
+[1mdiff --git a/icm-20600_mistakes.h b/icm-20600_mistakes.h[m
+[1mindex 94e55fa..5c69fda 100644[m
+[1m--- a/icm-20600_mistakes.h[m
+[1m+++ b/icm-20600_mistakes.h[m
+[36m@@ -13,6 +13,9 @@[m
+ [m
+ #define ICM_20600_DEVICE_IS_NOT_CONNECTED				(1U) + ICM_20600_MISTAKES_OFFSET[m
+ #define ICM_20600_INSTANCE_WAS_NOT_INITIALIZED			(2U) + ICM_20600_MISTAKES_OFFSET[m
+[32m+[m[32m#define ICM_20600_WRONG_GYROSCOPE_SCALE					(3U) + ICM_20600_MISTAKES_OFFSET[m[41m[m
+[32m+[m[32m#define ICM_20600_WRONG_ACCELEROMETER_SCALE				(4U) + ICM_20600_MISTAKES_OFFSET[m[41m[m
+[32m+[m[32m#define ICM_20600_INNPUT_ARRAY_IS_TOO_SMALL				(5U) + ICM_20600_MISTAKES_OFFSET[m[41m[m
+ [m
+ [m
+ #endif /* ICM_20600_MISTAKES_H_ */[m
