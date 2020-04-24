@@ -11,14 +11,14 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
 
 	uint32_t mistake_code = 0;
 
-	if(icm_instance->gyro_full_scale > icm_gyro_2000dps)
+	if(icm_instance->gyro_full_scale_setup > icm_gyro_2000dps)
 	{
-		icm_instance->gyro_full_scale = icm_gyro_2000dps;
+		icm_instance->gyro_full_scale_setup = icm_gyro_2000dps;
 		mistake_code = ICM_20600_WRONG_GYROSCOPE_SCALE;
 	}
-	if( icm_instance->accel_full_scale > icm_accel_16g)
+	if( icm_instance->accel_full_scale_setup > icm_accel_16g)
 	{
-		icm_instance->accel_full_scale = icm_accel_16g;
+		icm_instance->accel_full_scale_setup = icm_accel_16g;
 		mistake_code = ICM_20600_WRONG_ACCELEROMETER_SCALE;
 	}
 
@@ -51,15 +51,15 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
 
 	// Setup gyro and accel scales
 	icm_instance->send_one_byte(ICM_GYRO_CONFIG | ICM_WRITE_REGISTERS);
-	icm_instance->send_one_byte(icm_instance->gyro_full_scale << ICM_GYRO_CONFIG_FS_SEL_pos);
-	icm_instance->send_one_byte(icm_instance->accel_full_scale << ICM_ACCEL_CONFIG_1_FS_SEL_pos);
+	icm_instance->send_one_byte(icm_instance->gyro_full_scale_setup << ICM_GYRO_CONFIG_FS_SEL_pos);
+	icm_instance->send_one_byte(icm_instance->accel_full_scale_setup << ICM_ACCEL_CONFIG_1_FS_SEL_pos);
 
 	// Reset SPI connection
 	icm_instance->cs_high();
 	icm_instance->cs_low();
 
 	icm_instance->send_one_byte(ICM_PWR_MGMT_1 | ICM_WRITE_REGISTERS);
-	if ( icm_instance->enable_temperature_sencor )
+	if ( icm_instance->enable_temperature_sensor )
 	{
 		// Wakes up. Don't disable temperature sensor
 		icm_instance->send_one_byte(ICM_PWR_MGMT_1_CLKSEL_AUTO);
@@ -93,7 +93,7 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
  */
 // ************************************************ //
 
-uint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *data_storage_array, uint32_t add_temperature_data)
+uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_storage_array)
 {
 	// Code that doesn't depend on library type
 
@@ -101,6 +101,11 @@ uint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *
 	if (icm_instance->device_was_initialized == 0)
 	{
 		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	uint32_t size_of_input_array = sizeof(data_storage_array);
+	if(size_of_input_array < 12){
+		return ICM_20600_INNPUT_ARRAY_IS_TOO_SMALL;
 	}
 
 // SPI based implementation
@@ -116,7 +121,7 @@ uint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *
 	data_storage_array[icm_accelerometer_y] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
 	data_storage_array[icm_accelerometer_z] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
 
-	if (add_temperature_data)
+	if (size_of_input_array > 12)	// If array is at least 7 int16_t fields long
 	{
 		// Add temperature sensor data to array
 		data_storage_array[icm_temperature] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
@@ -129,9 +134,9 @@ uint32_t icm_20600_get_sensors_data( icm_20600_instance *icm_instance, int16_t *
 	}
 
 	// Get gyroscope data
-	data_storage_array[icm_gyroscope_x] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
-	data_storage_array[icm_gyroscope_y] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
-	data_storage_array[icm_gyroscope_z] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
+	data_storage_array[icm_gyroscope_x] = (icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF)) - icm_instance->gyro_calibration_coefficients[icm_x];
+	data_storage_array[icm_gyroscope_y] = (icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF)) - icm_instance->gyro_calibration_coefficients[icm_y];
+	data_storage_array[icm_gyroscope_z] = (icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF)) - icm_instance->gyro_calibration_coefficients[icm_z];
 
 	icm_instance->cs_high();
 
