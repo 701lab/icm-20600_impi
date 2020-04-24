@@ -5,8 +5,6 @@
 #include "icm-20600_registers.h"
 #include "icm-20600_mistakes.h"
 
-
-
 typedef struct{
 
 	// @brief Chip select high. Used in SPI communication to indicate the end of the transmission.
