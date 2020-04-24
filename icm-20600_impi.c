@@ -103,11 +103,6 @@ uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_
 		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
 	}
 
-	uint32_t size_of_input_array = sizeof(data_storage_array);
-	if(size_of_input_array < 12){
-		return ICM_20600_INNPUT_ARRAY_IS_TOO_SMALL;
-	}
-
 // SPI based implementation
 #ifdef ICM_THROUGH_SPI
 
@@ -121,7 +116,7 @@ uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_
 	data_storage_array[icm_accelerometer_y] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
 	data_storage_array[icm_accelerometer_z] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
 
-	if (size_of_input_array > 12)	// If array is at least 7 int16_t fields long
+	if (icm_instance->enable_temperature_sensor)	// If array is at least 7 int16_t fields long
 	{
 		// Add temperature sensor data to array
 		data_storage_array[icm_temperature] = icm_instance->send_one_byte(0xFF)<<8 | icm_instance->send_one_byte(0xFF);
@@ -151,6 +146,63 @@ uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_
 
 #endif /* ICM_THROUGH_I2C */
 }
+
+
+// ******************* Function ******************* //
+/*
+	@brief
+ */
+// ************************************************ //
+uint32_t icm_20600_get_proccesed_data(icm_20600_instance *icm_instance, float *data_storage_array)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	int16_t current_sencor_measurements[7];
+	icm_20600_get_raw_data(icm_instance, current_sencor_measurements);
+
+	float gyro_divider = 1.0f;
+
+	switch ( icm_instance->gyro_full_scale_setup )
+	{
+	case icm_gyro_250dps:
+		gyro_divider = 1.0f;
+		break;
+	case icm_gyro_500dps:
+		gyro_divider = 2.0f;
+		break;
+	case icm_gyro_1000dps:
+		gyro_divider = 4.0f;
+		break;
+	case icm_gyro_2000dps:
+		gyro_divider = 8.0f;
+		break;
+	default:
+		break;
+	}
+
+	float gyro_sensitivity = 131.072f/gyro_divider;
+	float accel_sensitivity = (uint32_t)(16384 >> (icm_instance->accel_full_scale_setup));	// Will be the same value for the 2g setup and twice as big for every next one
+
+	data_storage_array[icm_accelerometer_x] = (float)(current_sencor_measurements[icm_accelerometer_x]) / accel_sensitivity;
+	data_storage_array[icm_accelerometer_y] = (float)(current_sencor_measurements[icm_accelerometer_y]) / accel_sensitivity;
+	data_storage_array[icm_accelerometer_z] = (float)(current_sencor_measurements[icm_accelerometer_z]) / accel_sensitivity;
+
+	data_storage_array[icm_gyroscope_x] = (float)(current_sencor_measurements[icm_gyroscope_x]) / gyro_sensitivity;
+	data_storage_array[icm_gyroscope_y] = (float)(current_sencor_measurements[icm_gyroscope_y]) / gyro_sensitivity;
+	data_storage_array[icm_gyroscope_z] = (float)(current_sencor_measurements[icm_gyroscope_z]) / gyro_sensitivity;
+
+	if ( icm_instance->enable_temperature_sensor )
+	{
+		data_storage_array[icm_temperature] = (float)(current_sencor_measurements[icm_temperature]) / 340.0f + 36.53f;
+	}
+
+	return 0;
+}
+
+
 
 // ******************* Function ******************* //
 /*

@@ -40,13 +40,10 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance);
 
 uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_storage_array);
 
-uint32_t icm_20600_get_processed(icm_20600_instance *icm_instance, float *data_storage_array);
-
+uint32_t icm_20600_get_proccesed_data(icm_20600_instance *icm_instance, float *data_storage_array);
 
 // @brief send basic read message onto register with enable bit. If answer is 0 there is problems with connection to the device, or device didn't start.
 uint32_t icm_20600_check_if_alive(icm_20600_instance * icm_instance);
-
-//uint32_t icm_20600_setup(const icm_20600_instance *icm_instance, const uint8_t gyro_desired_dps_scale, const uint8_t accel_desired_g_scale);
 
 
 // ****** Note implemented yet
