@@ -5,7 +5,7 @@
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
+uint32_t icm_20600_basic_init(icm_20600 *icm_instance)
 {
 	// Interface independent code
 
@@ -73,6 +73,17 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
 	icm_instance->cs_high();
 
 	icm_instance->device_was_initialized = 1;
+
+	//!!
+	// Инициализация начальных углов. Чтобы это не парило мозг пользователю, если вдруг все перенастраивается или структура была объявлена не в глобальной памяти
+	icm_instance->previous_gyro_x = 0.0f;
+	icm_instance->previous_gyro_y = 0.0f;
+	icm_instance->previous_gyro_z = 0.0f;
+	//!!
+
+
+
+
 	return mistake_code;
 
 #endif /* ICM_THROUGH_SPI */
@@ -85,15 +96,13 @@ uint32_t icm_20600_basic_init(icm_20600_instance *icm_instance)
 #endif /* ICM_THROUGH_I2C */
 }
 
-
-
 // ******************* Function ******************* //
 /*
 	@brief
  */
 // ************************************************ //
 
-uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_storage_array)
+uint32_t icm_20600_get_raw_data(icm_20600 *icm_instance, int16_t *data_storage_array)
 {
 	// Code that doesn't depend on library type
 
@@ -153,7 +162,7 @@ uint32_t icm_20600_get_raw_data(icm_20600_instance *icm_instance, int16_t *data_
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_get_proccesed_data(icm_20600_instance *icm_instance, float *data_storage_array)
+uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *data_storage_array)
 {
 	if (icm_instance->device_was_initialized == 0)
 	{
@@ -209,7 +218,7 @@ uint32_t icm_20600_get_proccesed_data(icm_20600_instance *icm_instance, float *d
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_check_if_alive(icm_20600_instance *icm_instance)
+uint32_t icm_20600_check_if_alive(icm_20600 *icm_instance)
 {
 //SPI implementation
 #ifdef ICM_THROUGH_SPI
@@ -236,5 +245,94 @@ uint32_t icm_20600_check_if_alive(icm_20600_instance *icm_instance)
 #endif /* ICM_THROUGH_I2C */
 }
 
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
+// Code danger zone
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
+
+// Вычисляет все углы в радианах
+
+// Скорее всего эта функция на самом деле не работает и ее надо будет полностью переписать, когда я разберусь в том,
+//	как именно она должна работать. Но пока я не разобрался оставлю как есть
+uint32_t icm_20600_calculate_all_angles(icm_20600 *icm_instance, float angles_storage[3], float integration_period)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	float processed_values[7];
+	icm_20600_get_proccesed_data(icm_instance, processed_values);
+
+	// z x angle calculations
+	float accelerometer_based_angle = atan2(processed_values[icm_accelerometer_x], processed_values[icm_accelerometer_z]) * 57.296f;
+	float gyroscope_based_angle = (icm_instance->previous_gyro_x + processed_values[icm_gyroscope_y])/2.0f * integration_period;
+	icm_instance->previous_gyro_x = processed_values[icm_gyroscope_y];
+
+	// Calculations, unique for every plane
+	angles_storage[z_x_angle] = accelerometer_based_angle * icm_instance->complementary_filter_coefficient + gyroscope_based_angle * (1.0f - icm_instance->complementary_filter_coefficient);
+
+	return 0;
+}
+
+// Вычисляет только нужный угол из трех. Может вызываться без вызова каких либо других функций, так как будет считывать значения датчика самостоятельно
+uint32_t icm_20600_calculate_z_x_angle(icm_20600 *icm_instance, float *calculated_angle, float integration_period)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	float processed_values[7];
+	icm_20600_get_proccesed_data(icm_instance, processed_values);
+
+	// Calculations, unique for every plane
+	float accelerometer_based_angle = atan2(processed_values[icm_accelerometer_z], processed_values[icm_accelerometer_x]) * 57.296f;
+	float gyroscope_based_angle = (icm_instance->previous_gyro_y + processed_values[icm_gyroscope_y])/2.0f * integration_period;
+	icm_instance->previous_gyro_y = processed_values[icm_gyroscope_y];
+
+	*calculated_angle = accelerometer_based_angle * icm_instance->complementary_filter_coefficient + gyroscope_based_angle * (1.0f - icm_instance->complementary_filter_coefficient);
+
+	return 0;
+}
+
+
+uint32_t icm_20600_calculate_y_z_angle(icm_20600 *icm_instance, float *calculated_angle, float integration_period)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	float processed_values[7];
+	icm_20600_get_proccesed_data(icm_instance, processed_values);
+
+	// Calculations, unique for every plane
+	float accelerometer_based_angle = atan2(processed_values[icm_accelerometer_z], processed_values[icm_accelerometer_y]) * 57.296f;	// Value in degrees
+	float gyroscope_based_angle = (icm_instance->previous_gyro_x + processed_values[icm_gyroscope_x])/2.0f * integration_period;
+	icm_instance->previous_gyro_x = processed_values[icm_gyroscope_x];
+
+	*calculated_angle = accelerometer_based_angle * icm_instance->complementary_filter_coefficient + gyroscope_based_angle * (1.0f - icm_instance->complementary_filter_coefficient);
+
+	return 0;
+}
+
+uint32_t icm_20600_calculate_x_y_angle(icm_20600 *icm_instance, float *calculated_angle, float integration_period)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	float processed_values[7];
+	icm_20600_get_proccesed_data(icm_instance, processed_values);
+
+	// пока просто верну 0. Так как для балансирующего робота этот угол не нужен
+
+
+	return 0;
+}
 
 
