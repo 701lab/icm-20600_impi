@@ -45,6 +45,12 @@ typedef struct{
 } icm_20600;
 
 
+#define ICM_20600_GYRO_BASIC_SENSITIVITY 			131.072f	// 2^16/500 where 500 is in dps - full scale of +-250 dps gyroscope setup - the most precise one. All other scales can be based on this one.
+#define ICM_20600_ACC_BASIC_SENSITIVITY				16384		// 2^16/4 where 4 in g - full scale of +-2g accelerometer setup - the most precise one. All other scales can be based on this one.
+#define ICM_20600_TEMPERATURE_SENSITIVITY			340.0f
+#define ICM_20600_TEMPERATURE_OFFSET				36.53f		// in degrees Celsius
+
+
 // Будет использоваться для трапециидального интегрирования в гироскопе
 //typedef struct
 //{
@@ -59,7 +65,10 @@ uint32_t icm_20600_basic_init(icm_20600 *icm_instance);
 
 uint32_t icm_20600_get_raw_data(icm_20600 *icm_instance, int16_t *data_storage_array);
 
-uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *data_storage_array);
+uint32_t icm_20600_procces_raw_data(icm_20600 *icm_instance, int16_t *raw_input_array, float * processed_output_array);
+
+uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *processed_output_array);
+
 
 // @brief send basic read message onto register with enable bit. If answer is 0 there is problems with connection to the device, or device didn't start.
 uint32_t icm_20600_check_if_alive(icm_20600 * icm_instance);

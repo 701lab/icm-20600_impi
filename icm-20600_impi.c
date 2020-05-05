@@ -162,7 +162,59 @@ uint32_t icm_20600_get_raw_data(icm_20600 *icm_instance, int16_t *data_storage_a
 	@brief
  */
 // ************************************************ //
-uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *data_storage_array)
+uint32_t icm_20600_procces_raw_data(icm_20600 *icm_instance, int16_t *raw_input_array, float * processed_output_array)
+{
+	if (icm_instance->device_was_initialized == 0)
+	{
+		return ICM_20600_INSTANCE_WAS_NOT_INITIALIZED;
+	}
+
+	float gyro_divider = 1.0f;
+
+		switch ( icm_instance->gyro_full_scale_setup )
+		{
+		case icm_gyro_250dps:
+			gyro_divider = 1.0f;
+			break;
+		case icm_gyro_500dps:
+			gyro_divider = 2.0f;
+			break;
+		case icm_gyro_1000dps:
+			gyro_divider = 4.0f;
+			break;
+		case icm_gyro_2000dps:
+			gyro_divider = 8.0f;
+			break;
+		default:
+			break;
+		}
+
+		float gyro_sensitivity = ICM_20600_GYRO_BASIC_SENSITIVITY/gyro_divider;
+		float accel_sensitivity = (uint32_t)(ICM_20600_ACC_BASIC_SENSITIVITY >> (icm_instance->accel_full_scale_setup));	// Will be the same value for the 2g setup and twice as big for every next one
+
+		processed_output_array[icm_accelerometer_x] = (float)(raw_input_array[icm_accelerometer_x]) / accel_sensitivity;
+		processed_output_array[icm_accelerometer_y] = (float)(raw_input_array[icm_accelerometer_y]) / accel_sensitivity;
+		processed_output_array[icm_accelerometer_z] = (float)(raw_input_array[icm_accelerometer_z]) / accel_sensitivity;
+
+		processed_output_array[icm_gyroscope_x] = (float)(raw_input_array[icm_gyroscope_x]) / gyro_sensitivity;
+		processed_output_array[icm_gyroscope_y] = (float)(raw_input_array[icm_gyroscope_y]) / gyro_sensitivity;
+		processed_output_array[icm_gyroscope_z] = (float)(raw_input_array[icm_gyroscope_z]) / gyro_sensitivity;
+
+		if ( icm_instance->enable_temperature_sensor )
+		{
+			processed_output_array[icm_temperature] = (float)(raw_input_array[icm_temperature]) / ICM_20600_TEMPERATURE_SENSITIVITY + ICM_20600_TEMPERATURE_OFFSET;
+		}
+
+		return 0;
+}
+
+
+// ******************* Function ******************* //
+/*
+	@brief
+ */
+// ************************************************ //
+uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *processed_output_array)
 {
 	if (icm_instance->device_was_initialized == 0)
 	{
@@ -172,44 +224,49 @@ uint32_t icm_20600_get_proccesed_data(icm_20600 *icm_instance, float *data_stora
 	int16_t current_sencor_measurements[7];
 	icm_20600_get_raw_data(icm_instance, current_sencor_measurements);
 
-	float gyro_divider = 1.0f;
+	icm_20600_procces_raw_data(icm_instance, current_sencor_measurements, processed_output_array);
 
-	switch ( icm_instance->gyro_full_scale_setup )
-	{
-	case icm_gyro_250dps:
-		gyro_divider = 1.0f;
-		break;
-	case icm_gyro_500dps:
-		gyro_divider = 2.0f;
-		break;
-	case icm_gyro_1000dps:
-		gyro_divider = 4.0f;
-		break;
-	case icm_gyro_2000dps:
-		gyro_divider = 8.0f;
-		break;
-	default:
-		break;
-	}
-
-	float gyro_sensitivity = 131.072f/gyro_divider;
-	float accel_sensitivity = (uint32_t)(16384 >> (icm_instance->accel_full_scale_setup));	// Will be the same value for the 2g setup and twice as big for every next one
-
-	data_storage_array[icm_accelerometer_x] = (float)(current_sencor_measurements[icm_accelerometer_x]) / accel_sensitivity;
-	data_storage_array[icm_accelerometer_y] = (float)(current_sencor_measurements[icm_accelerometer_y]) / accel_sensitivity;
-	data_storage_array[icm_accelerometer_z] = (float)(current_sencor_measurements[icm_accelerometer_z]) / accel_sensitivity;
-
-	data_storage_array[icm_gyroscope_x] = (float)(current_sencor_measurements[icm_gyroscope_x]) / gyro_sensitivity;
-	data_storage_array[icm_gyroscope_y] = (float)(current_sencor_measurements[icm_gyroscope_y]) / gyro_sensitivity;
-	data_storage_array[icm_gyroscope_z] = (float)(current_sencor_measurements[icm_gyroscope_z]) / gyro_sensitivity;
-
-	if ( icm_instance->enable_temperature_sensor )
-	{
-		data_storage_array[icm_temperature] = (float)(current_sencor_measurements[icm_temperature]) / 340.0f + 36.53f;
-	}
+//	float gyro_divider = 1.0f;
+//
+//	switch ( icm_instance->gyro_full_scale_setup )
+//	{
+//	case icm_gyro_250dps:
+//		gyro_divider = 1.0f;
+//		break;
+//	case icm_gyro_500dps:
+//		gyro_divider = 2.0f;
+//		break;
+//	case icm_gyro_1000dps:
+//		gyro_divider = 4.0f;
+//		break;
+//	case icm_gyro_2000dps:
+//		gyro_divider = 8.0f;
+//		break;
+//	default:
+//		break;
+//	}
+//
+//	float gyro_sensitivity = ICM_20600_GYRO_BASIC_SENSITIVITY/gyro_divider;
+//	float accel_sensitivity = (uint32_t)(ICM_20600_ACC_BASIC_SENSITIVITY >> (icm_instance->accel_full_scale_setup));	// Will be the same value for the 2g setup and two times smaller for every next setup
+//
+//	data_storage_array[icm_accelerometer_x] = (float)(current_sencor_measurements[icm_accelerometer_x]) / accel_sensitivity;
+//	data_storage_array[icm_accelerometer_y] = (float)(current_sencor_measurements[icm_accelerometer_y]) / accel_sensitivity;
+//	data_storage_array[icm_accelerometer_z] = (float)(current_sencor_measurements[icm_accelerometer_z]) / accel_sensitivity;
+//
+//	data_storage_array[icm_gyroscope_x] = (float)(current_sencor_measurements[icm_gyroscope_x]) / gyro_sensitivity;
+//	data_storage_array[icm_gyroscope_y] = (float)(current_sencor_measurements[icm_gyroscope_y]) / gyro_sensitivity;
+//	data_storage_array[icm_gyroscope_z] = (float)(current_sencor_measurements[icm_gyroscope_z]) / gyro_sensitivity;
+//
+//	if ( icm_instance->enable_temperature_sensor )
+//	{
+//		data_storage_array[icm_temperature] = (float)(current_sencor_measurements[icm_temperature]) / ICM_20600_TEMPERATURE_SENSITIVITY + ICM_20600_TEMPERATURE_OFFSET;
+//	}
 
 	return 0;
 }
+
+
+
 
 
 
@@ -289,7 +346,7 @@ uint32_t icm_20600_calculate_z_x_angle(icm_20600 *icm_instance, float *calculate
 	icm_20600_get_proccesed_data(icm_instance, processed_values);
 
 	// Calculations, unique for every plane
-	float accelerometer_based_angle = atan2(processed_values[icm_accelerometer_z], processed_values[icm_accelerometer_x]) * 57.296f;
+	float accelerometer_based_angle = atan2(processed_values[icm_accelerometer_x], processed_values[icm_accelerometer_z]) * 57.296f;
 	float gyroscope_based_angle = (icm_instance->previous_gyro_y + processed_values[icm_gyroscope_y])/2.0f * integration_period;
 	icm_instance->previous_gyro_y = processed_values[icm_gyroscope_y];
 
